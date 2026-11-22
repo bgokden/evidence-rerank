@@ -1,0 +1,13 @@
+# Working area. Dumped matrices, trained adapters, dataset caches and the measurement
+# notes that go with them: reproducible output and internal record, none of it part of
+# the library.
+tmp/
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/

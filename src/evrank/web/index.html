@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence Ablation Bench</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground: #eceff3;
+    --surface: #ffffff;
+    --surface-2: #f5f7f9;
+    --ink: #151c23;
+    --ink-2: #44525f;
+    --muted: #6a7885;
+    --hairline: #d4dbe2;
+    --hairline-2: #e4e9ee;
+    --accent: #1c5cab;
+    --pole-a: #2a78d6;
+    --pole-b: #e34948;
+    --neutral-mark: #9aa7b4;
+    --bad: #b3261e;
+    --radius: 3px;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif: "IBM Plex Serif", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11161b; --surface: #182027; --surface-2: #1e272f;
+      --ink: #e7eef4; --ink-2: #b6c3cf; --muted: #8d9ca9;
+      --hairline: #2d3842; --hairline-2: #232d36; --accent: #6da7ec;
+      --pole-a: #3987e5; --pole-b: #e66767; --neutral-mark: #6d7c89; --bad: #f2928c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #11161b; --surface: #182027; --surface-2: #1e272f;
+    --ink: #e7eef4; --ink-2: #b6c3cf; --muted: #8d9ca9;
+    --hairline: #2d3842; --hairline-2: #232d36; --accent: #6da7ec;
+    --pole-a: #3987e5; --pole-b: #e66767; --neutral-mark: #6d7c89; --bad: #f2928c;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.45;
+    padding: 26px 16px 44px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  h1 {
+    font-family: var(--serif); font-weight: 600; margin: 0;
+    font-size: clamp(24px, 3.6vw, 31px); letter-spacing: -0.015em; line-height: 1.1;
+  }
+  .lede { margin: 6px 0 0; max-width: 78ch; color: var(--ink-2); }
+  .eyebrow {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin: 0;
+  }
+  .panel {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: var(--radius); padding: 12px 14px 14px; min-width: 0;
+  }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+  button {
+    font: inherit; font-size: 12.5px; background: var(--surface); color: var(--ink-2);
+    border: 1px solid var(--hairline); border-radius: var(--radius);
+    padding: 6px 11px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary {
+    font-weight: 500; background: var(--accent); color: #fff; border-color: var(--accent);
+    padding: 7px 18px; font-size: 13px;
+  }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button.key { font-family: var(--mono); }
+  select {
+    font: inherit; font-size: 13px; padding: 7px 10px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--hairline);
+    border-radius: var(--radius); min-width: 230px;
+  }
+  select:hover { border-color: var(--accent); }
+
+  /* An open tab never re-requests the page, so an edit on disk is invisible to it
+     however the caching is set. This says so instead of letting it be a mystery. */
+  .stale {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    padding: 9px 13px; border-radius: var(--radius);
+    border: 1px solid var(--accent); background: var(--surface-2); font-size: 13px;
+  }
+  .stale button { padding: 5px 12px; font-size: 12.5px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sep { width: 1px; align-self: stretch; background: var(--hairline); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .json-box {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
+    background: var(--surface-2); border: 1px solid var(--hairline-2);
+    border-radius: var(--radius); padding: 11px; margin: 0;
+    width: 100%; height: 440px; overflow: auto;
+    color: var(--ink); tab-size: 2;
+    /* Both panes hold long sentences now, and `pre` turned every one of them into a
+       horizontal scroll -- on the left that meant scrolling sideways to read evidence
+       you had just typed. `pre-wrap` soft-wraps them, keeps the indentation that
+       makes JSON readable, changes nothing in the text, and leaves one scrollbar. */
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  textarea.json-box { resize: vertical; }
+
+  /* Thin, themed scrollbars. The default is a pale chunky slab that sits badly on a
+     dark surface, and on this page three things scroll. Both the standard properties
+     and the WebKit ones, because neither is supported everywhere. */
+  html, .json-box { scrollbar-width: thin; scrollbar-color: var(--hairline) transparent; }
+  .json-box::-webkit-scrollbar { width: 11px; height: 11px; }
+  .json-box::-webkit-scrollbar-track { background: transparent; }
+  .json-box::-webkit-scrollbar-thumb {
+    background: var(--hairline); border-radius: 6px;
+    /* A border in the surface colour insets the thumb, so it reads as a thin bar
+       with breathing room rather than filling the gutter. */
+    border: 3px solid var(--surface-2);
+  }
+  .json-box::-webkit-scrollbar-thumb:hover { background: var(--neutral-mark); }
+  .json-box::-webkit-scrollbar-corner { background: transparent; }
+  .jv-key { color: var(--accent); }
+  .jv-str { color: var(--ink); }
+  .jv-num { color: var(--pole-b); }
+  .jv-lit { color: var(--muted); font-style: italic; }
+  .endpoint { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .status { font-size: 12.5px; color: var(--muted); min-height: 1.4em; font-family: var(--mono); margin: 10px 0 0; }
+  .status.bad { color: var(--bad); font-family: var(--sans); }
+
+  table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+  th, td { text-align: right; padding: 5px 9px; border-bottom: 1px solid var(--hairline-2); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 500; border-bottom: 0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--neutral-mark); margin-right: 7px; }
+  .dot.a { background: var(--pole-a); }
+  .dot.b { background: var(--pole-b); }
+  .foot { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  ol.reasons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  ol.reasons li { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 10px; align-items: baseline; }
+  ol.reasons .rank { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  ol.reasons .who { font-weight: 600; }
+  ol.reasons .score { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--muted); }
+  ol.reasons .because { grid-column: 2 / -1; font-size: 14px; margin-top: 3px;
+    color: var(--ink); }
+  ol.reasons .because b { font-weight: 600; color: var(--ink); }
+  ol.reasons .versus { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+  /* What the candidate is, next to why it was chosen. Clamped, because a listing
+     is short but a caller may pass a page of text. */
+  ol.reasons .listing {
+    grid-column: 2 / -1; font-size: 12.5px; color: var(--ink-2); margin-top: 2px;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  ol.reasons .method { grid-column: 2 / -1; font-size: 11px; color: var(--muted);
+    font-family: var(--mono); margin-top: 2px; }
+  button[disabled] { opacity: 0.4; cursor: not-allowed; }
+  ol.reasons .list { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 3px; margin-top: 3px; }
+  ol.reasons .reason { display: grid; grid-template-columns: 62px 1fr; gap: 10px; font-size: 13px; }
+  ol.reasons .effect { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  ol.reasons .effect.up { color: var(--pole-a); }
+  ol.reasons .effect.down { color: var(--pole-b); }
+  ol.reasons .what { color: var(--ink-2); }
+  ol.reasons .what i { font-style: normal; font-family: var(--mono); font-size: 11.5px;
+    color: var(--muted); white-space: pre; }
+  ol.reasons .because { color: var(--ink-2); }
+  ol.reasons .because b { font-weight: 600; color: var(--ink); }
+
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Post-hoc explanation of an opaque re-ranker</p>
+    <h1>Evidence Ablation Bench</h1>
+    <p class="lede">
+      Edit the request on the left and run it. Evidence and candidates can be in any language.
+      Nothing reads the model's weights: every number on the right comes from removing evidence
+      and scoring the context again.
+    </p>
+  </header>
+
+  <section class="panel">
+    <div class="bar">
+      <span class="eyebrow">Load</span>
+      <select id="presets" aria-label="Load a case"></select>
+      <span class="sep"></span>
+      <span class="eyebrow">Toggle</span>
+      <button class="key" type="button" id="toggle-explain">explain</button>
+      <button class="key" type="button" id="toggle-compare">compare_maskers</button>
+      <button class="key" type="button" id="toggle-sentences">sentences</button>
+      <button class="key" type="button" id="toggle-top-only">top_only</button>
+      <button class="key" type="button" id="toggle-detail">detail</button>
+      <span class="sep"></span>
+      <button type="button" id="format">Format</button>
+      <button class="primary" type="button" id="run">Run</button>
+    </div>
+    <p class="status" id="status"></p>
+  </section>
+
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-head">
+        <p class="eyebrow">Request</p>
+        <span class="endpoint">POST /api/rank</span>
+      </div>
+      <textarea class="json-box" id="request" spellcheck="false" aria-label="Request JSON"></textarea>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <p class="eyebrow">Response</p>
+        <span class="endpoint" id="response-size"></span>
+      </div>
+      <pre class="json-box" id="response"></pre>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><p class="eyebrow">Ranking</p></div>
+    <ol class="reasons" id="ranking"></ol>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <p class="eyebrow">Where the time went</p>
+      <span class="endpoint" id="timing-total"></span>
+    </div>
+    <table id="timing"></table>
+  </section>
+
+  <footer class="foot">
+    <span id="model-line"></span>
+    <span>Measured by removing evidence and re-scoring: these are the model's sensitivities to the recorded context, not claims about anyone's reasons.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var el = function (id) { return document.getElementById(id); };
+
+  // What the page opens on, and so what the project recommends showing a reader.
+  var LANDING = "Why this one";
+
+  var PRESET_GROUPS = [
+    { label: "Short and current", names: ["Why this one", "Paris (English)"] },
+    { label: "Other languages", names: ["İstanbul (Türkçe)", "Cross-lingual"] },
+    { label: "Where it goes wrong", names: ["Berlin flats", "Nothing to say"] },
+    { label: "No explanation", names: ["Rank only"] }
+  ];
+
+  var PRESETS = {
+    "Why this one": {
+      sentences: true,
+      // The kind is the verb of the sentence, so it reads as something the user did.
+      evidence: [
+        { id: "s1", kind: "searched for", text: "ramen restaurants in Paris" },
+        { id: "s2", kind: "viewed", text: "a Japanese noodle bar listing near Opera" },
+        { id: "h1", kind: "reserved", text: "a hotel on Rue de Rivoli, 1st arrondissement" },
+        { id: "b1", kind: "told us", text: "two people, dinner tonight, mid-range budget" }
+      ],
+      candidates: [
+        { id: "shiso", name: "Shiso Ramen", text: "Tonkotsu ramen counter in the 2nd. Open until 23:00. About 22 EUR per person." },
+        { id: "verde", name: "Trattoria Verde", text: "Handmade pasta near Bastille. Open until 22:30. About 35 EUR per person." },
+        { id: "komachi", name: "Izakaya Komachi", text: "Japanese small plates and sake in the 1st. Open until 00:00. About 40 EUR per person." }
+      ],
+      explain: true
+    },
+    // The cases from examples/other_domains.py. Two of these print a reason that is
+    // wrong, which is the point: the ranker is wrong and the explanation reports it.
+    "Berlin flats": {
+      sentences: true,
+      // The three floors, written out at their defaults so they can be played with.
+      // min_effect is the one that works: it removes reasons invented out of noise.
+      // min_share is the dynamic one, and raising it here removes a good reason
+      // before it removes a wrong one -- the wrong ones below are large.
+      min_effect: 0.1,
+      min_specificity: 0.1,
+      min_share: 0.0,
+      evidence: [
+        { id: "q1", kind: "searched for", text: "two-bedroom flats near a U-Bahn station" },
+        { id: "q2", kind: "filtered to", text: "pets allowed" },
+        { id: "b1", kind: "told us", text: "budget around 1800 EUR cold rent" },
+        { id: "s1", kind: "saved", text: "a listing in Kreuzberg" }
+      ],
+      candidates: [
+        { id: "a", name: "Gneisenaustrasse 12", text: "Bright two-bedroom in Kreuzberg, four minutes from U7. Cats and dogs welcome. 1750 EUR cold rent." },
+        { id: "b", name: "Prenzlauer Allee 88", text: "Renovated three-bedroom in Prenzlauer Berg with a balcony. No pets. 2600 EUR cold rent." },
+        { id: "c", name: "Tempelhofer Weg 4", text: "Studio in an industrial conversion, 20 minutes by bus to the nearest station. 990 EUR cold rent." },
+        { id: "d", name: "Wiener Strasse 31", text: "Two-bedroom above a bakery in Kreuzberg, no lift, fifth floor. 1820 EUR cold rent." }
+      ],
+      explain: true
+    },
+    "Nothing to say": {
+      sentences: true,
+      evidence: [
+        { id: "o1", kind: "searched for", text: "winter tyres for a Volvo V60" },
+        { id: "o2", kind: "viewed", text: "a guide to filing German tax returns" },
+        { id: "o3", kind: "told us", text: "two people" }
+      ],
+      candidates: [
+        { id: "a", name: "Shiso Ramen", text: "Tonkotsu ramen counter in the 2nd. Open until 23:00. About 22 EUR per person." },
+        { id: "b", name: "Trattoria Verde", text: "Handmade pasta near Bastille. Open until 22:30. About 35 EUR per person." },
+        { id: "c", name: "Brasserie du Nord", text: "Steak frites all day by the station. About 30 EUR per person." }
+      ],
+      explain: true
+    },
+    "Paris (English)": {
+      evidence: [
+        { id: "s1", kind: "searched for", text: "ramen restaurants in Paris" },
+        { id: "s2", kind: "searched for", text: "izakaya near the Louvre" },
+        { id: "s3", kind: "viewed", text: "a Japanese noodle bar listing" },
+        { id: "h1", kind: "reserved", text: "hotel on Rue de Rivoli, 1st arrondissement, central Paris" },
+        { id: "t1", kind: "told us", text: "dinner after 20:00, table for two" },
+        { id: "b1", kind: "told us", text: "mid-range budget, about 40 EUR per person" },
+        { id: "v1", kind: "searched for", text: "vegetarian lunch spots in Lyon last month" }
+      ],
+      candidates: [
+        { id: "shiso", name: "Shiso Ramen", text: "Japanese ramen bar in the 1st arrondissement, a short walk from Rue de Rivoli. Open until 23:00. Bowls around 18 EUR." },
+        { id: "marais", name: "Le Petit Marais", text: "Classic French bistro in the Marais, 3rd arrondissement. Last orders 21:30. Three-course menu 42 EUR." },
+        { id: "komachi", name: "Izakaya Komachi", text: "Japanese izakaya serving small plates and sake near the Louvre. Open until midnight. About 35 EUR per person." },
+        { id: "verde", name: "Trattoria Verde", text: "Italian trattoria with vegetarian pasta dishes in the 11th arrondissement. Closes at 22:00. About 25 EUR per person." },
+        { id: "nord", name: "Brasserie du Nord", text: "Large brasserie by Gare du Nord serving steak frites all day. Kitchen closes at 20:30. About 30 EUR per person." }
+      ],
+      explain: true
+    },
+    "İstanbul (Türkçe)": {
+      language: "tr",
+      sentences: true,
+      evidence: [
+        // Kinds in Turkish here: the kind becomes the sentence's verb,
+        // so a localised sentence needs a localised kind. The ranker itself reads
+        // English kinds beside any language; only the sentence needs them matched.
+        { id: "s1", kind: "aradığınız", text: "İstanbul'da ramen restoranları" },
+        { id: "s2", kind: "aradığınız", text: "Karaköy yakınında izakaya" },
+        { id: "h1", kind: "rezervasyon yaptığınız", text: "Sultanahmet'te otel, tarihi yarımada" },
+        { id: "t1", kind: "belirttiğiniz", text: "akşam yemeği 20:00'den sonra, iki kişilik masa" },
+        { id: "b1", kind: "belirttiğiniz", text: "orta bütçe, kişi başı yaklaşık 800 TL" }
+      ],
+      candidates: [
+        { id: "shiso", name: "Shiso Ramen", text: "Sultanahmet'te Japon ramen barı. 23:00'e kadar açık. Kaseler yaklaşık 350 TL." },
+        { id: "komachi", name: "Izakaya Komachi", text: "Karaköy'de küçük tabaklar ve sake sunan Japon izakaya. Gece yarısına kadar açık." },
+        { id: "bistro", name: "Küçük Bistro", text: "Beyoğlu'nda klasik Fransız bistrosu. Son sipariş 21:30." }
+      ],
+      explain: true
+    },
+    "Cross-lingual": {
+      evidence: [
+        { id: "s1", kind: "searched for", text: "Paris'te ramen restoranları" },
+        { id: "s2", kind: "searched for", text: "Louvre yakınında izakaya" },
+        { id: "h1", kind: "reserved", text: "Rue de Rivoli'de otel, 1. bölge" },
+        { id: "b1", kind: "told us", text: "orta bütçe, kişi başı yaklaşık 40 EUR" }
+      ],
+      candidates: [
+        { id: "shiso", name: "Shiso Ramen (JA)", text: "ルーヴル美術館の近く、リヴォリ通りから徒歩圏内の日本のラーメン店。23時まで営業。一杯およそ18ユーロ。" },
+        { id: "marais", name: "Le Petit Marais (FR)", text: "Bistrot français classique dans le Marais, 3e arrondissement. Menu trois plats 42 EUR." },
+        { id: "komachi", name: "Izakaya Komachi (JA)", text: "ルーヴル近くの居酒屋。小皿料理と日本酒。深夜まで営業。一人およそ35ユーロ。" },
+        { id: "nord", name: "Brasserie du Nord (DE)", text: "Große Brasserie am Gare du Nord, den ganzen Tag Steak Frites. Etwa 30 EUR pro Person." }
+      ],
+      explain: true
+    },
+    "Rank only": {
+      evidence: [
+        { id: "s1", kind: "searched for", text: "ramen restaurants in Paris" },
+        { id: "h1", kind: "reserved", text: "hotel on Rue de Rivoli" }
+      ],
+      candidates: [
+        { id: "shiso", name: "Shiso Ramen", text: "Ramen bar near Rue de Rivoli. Bowls around 18 EUR." },
+        { id: "komachi", name: "Izakaya Komachi", text: "Izakaya near the Louvre. About 35 EUR per person." }
+      ],
+      explain: false
+    }
+  };
+
+  var TOGGLES = [
+    ["toggle-explain", "explain"],
+    ["toggle-compare", "compare_maskers"],
+    ["toggle-sentences", "sentences"],
+    ["toggle-top-only", "top_only"],
+    ["toggle-detail", "detail"]
+  ];
+
+  var state = { busy: false, pending: false, last: null, sent: null };
+
+  function setStatus(message, bad) {
+    var node = el("status");
+    node.textContent = message;
+    node.className = bad ? "status bad" : "status";
+  }
+
+  function readRequest() {
+    try {
+      return JSON.parse(el("request").value);
+    } catch (error) {
+      setStatus("Request is not valid JSON: " + error.message, true);
+      return null;
+    }
+  }
+
+  function writeRequest(body) {
+    el("request").value = JSON.stringify(body, null, 2);
+    markToggles(body);
+  }
+
+  function markToggles(body) {
+    TOGGLES.forEach(function (pair) {
+      el(pair[0]).setAttribute("aria-pressed", String(!!body[pair[1]]));
+    });
+  }
+
+  function toggleField(name) {
+    var body = readRequest();
+    if (!body) { return; }
+    body[name] = !body[name];
+    // compare_maskers only means anything alongside an explanation.
+    if (name === "compare_maskers" && body[name]) { body.explain = true; }
+    if (name === "explain" && !body[name]) { delete body.compare_maskers; }
+    if (!body[name]) { delete body[name]; }
+    writeRequest(body);
+    run();
+  }
+
+  // Colouring keys, strings, numbers and literals makes a long response readable.
+  // The JSON is escaped first; it carries text the user typed.
+  function showResponse(value) {
+    var text = JSON.stringify(value, null, 2);
+    var escaped = text.replace(/[&<>]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+    });
+    el("response").innerHTML = escaped.replace(
+      /"(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(\.\d+)?([eE][+-]?\d+)?/g,
+      function (match) {
+        var cls = "jv-num";
+        if (match.charAt(0) === '"') { cls = /:\s*$/.test(match) ? "jv-key" : "jv-str"; }
+        else if (/^(true|false|null)$/.test(match)) { cls = "jv-lit"; }
+        return '<span class="' + cls + '">' + match + "</span>";
+      }
+    );
+    el("response-size").textContent = (text.length / 1024).toFixed(1) + " KB";
+  }
+
+  function signed(value, digits) {
+    var d = typeof digits === "number" ? digits : 2;
+    return (value >= 0 ? "+" : "−") + Math.abs(value).toFixed(d);
+  }
+
+  function renderRanking(data) {
+    var explained = data.explanation || data.agreement;
+    var pair = explained ? explained.pair : {};
+    var host = el("ranking");
+    host.textContent = "";
+    data.ranking.forEach(function (row) {
+      var item = document.createElement("li");
+
+      var rank = document.createElement("span");
+      rank.className = "rank";
+      rank.textContent = row.rank + ".";
+      item.appendChild(rank);
+
+      var who = document.createElement("span");
+      who.className = "who";
+      var dot = document.createElement("span");
+      dot.className = "dot" + (row.id === pair.a ? " a" : row.id === pair.b ? " b" : "");
+      who.appendChild(dot);
+      who.appendChild(document.createTextNode(row.name));
+      item.appendChild(who);
+
+      var score = document.createElement("span");
+      score.className = "score";
+      score.textContent = signed(row.score);
+      item.appendChild(score);
+
+      var text = candidateText(row.id);
+      if (text) {
+        var listing = document.createElement("span");
+        listing.className = "listing";
+        listing.textContent = text;
+        listing.title = text;
+        item.appendChild(listing);
+      }
+
+      if (row.because) {
+        var sentence = document.createElement("span");
+        sentence.className = "because";
+        // The sentence quotes the evidence; show those quotes in the stronger ink.
+        row.because.split(/("[^"]*")/).forEach(function (part, index) {
+          if (index % 2 === 1) {
+            var strong = document.createElement("b");
+            strong.textContent = part;
+            sentence.appendChild(strong);
+          } else {
+            sentence.appendChild(document.createTextNode(part));
+          }
+        });
+        item.appendChild(sentence);
+      }
+      if (row.method) {
+        var method = document.createElement("span");
+        method.className = "method";
+        method.textContent = "by " + row.method;
+        item.appendChild(method);
+      }
+      if (row.reasons) {
+        item.appendChild(reasonList(row.reasons, false));
+        if (row.against && row.against.length) {
+          item.appendChild(reasonList(row.against, true));
+        }
+      }
+      host.appendChild(item);
+    });
+  }
+
+  // The response does not carry the candidates back; the page sent them, so it
+  // looks them up rather than asking the service to repeat itself.
+  function candidateText(id) {
+    var sent = state.sent;
+    if (!sent || !sent.candidates) { return ""; }
+    for (var i = 0; i < sent.candidates.length; i++) {
+      if (sent.candidates[i].id === id) { return sent.candidates[i].text || ""; }
+    }
+    return "";
+  }
+
+  function reasonList(reasons, held) {
+    var wrapper = document.createElement("span");
+    wrapper.className = "list";
+    if (held) {
+      var caption = document.createElement("span");
+      caption.className = "versus";
+      caption.textContent = "held back by";
+      wrapper.appendChild(caption);
+    }
+    reasons.forEach(function (reason) {
+      var line = document.createElement("span");
+      line.className = "reason";
+      var effect = document.createElement("span");
+      effect.className = "effect " + (reason.effect >= 0 ? "up" : "down");
+      effect.textContent = signed(reason.effect);
+      var what = document.createElement("span");
+      what.className = "what";
+      what.textContent = reason.evidence;
+      // The effect is the part specific to this candidate, so
+      // the raw effect on its own score is worth keeping next to it.
+      if (typeof reason.onItsOwnScore === "number") {
+        var raw = document.createElement("i");
+        // A share above 100% means the evidence cost the other candidates as well,
+        // which is worth saying in words: "2896% specific" is true and unreadable.
+        raw.textContent = "  " + signed(reason.onItsOwnScore) + " on its own score, " +
+          (reason.specificity > 1
+            ? "and it cost the others"
+            : Math.round(100 * reason.specificity) + "% specific to this one");
+        what.appendChild(raw);
+      }
+      line.appendChild(effect);
+      line.appendChild(what);
+      wrapper.appendChild(line);
+    });
+    return wrapper;
+  }
+
+  function renderTiming(timing) {
+    el("timing-total").textContent = timing.totalMs + " ms";
+    var table = el("timing");
+    table.textContent = "";
+    var head = document.createElement("thead");
+    head.innerHTML = "<tr><th>stage</th><th>pairs</th><th>calls</th><th>ms</th></tr>";
+    table.appendChild(head);
+    var body = document.createElement("tbody");
+    timing.stages.forEach(function (stage) {
+      var tr = document.createElement("tr");
+      [[stage.name, ""], [stage.modelPairs, "num"], [stage.batches, "num"],
+       [stage.ms.toFixed(1), "num"]].forEach(function (cell) {
+        var td = document.createElement("td");
+        td.className = cell[1];
+        td.textContent = String(cell[0]);
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    var total = document.createElement("tr");
+    total.className = "total";
+    total.innerHTML = "<td>total, " + timing.pairsServedFromCache + " from cache</td>" +
+      "<td class=\"num\">" + timing.modelPairs + "</td><td class=\"num\"></td>" +
+      "<td class=\"num\">" + timing.totalMs.toFixed(1) + "</td>";
+    body.appendChild(total);
+    table.appendChild(body);
+  }
+
+  function run() {
+    if (state.busy) { state.pending = true; return; }
+    var body = readRequest();
+    if (!body) { return; }
+    markToggles(body);
+
+    state.busy = true;
+    setStatus("Scoring with the model…");
+    var started = performance.now();
+
+    fetch("/api/rank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (response) {
+      return response.json().then(function (parsed) {
+        if (!response.ok) { throw new Error(parsed.detail || ("HTTP " + response.status)); }
+        return parsed;
+      });
+    }).then(function (data) {
+      var roundTrip = performance.now() - started;
+      state.last = data;
+      state.sent = body;
+      showResponse(data);
+      renderRanking(data);
+      renderTiming(data.timing);
+      setStatus(
+        data.timing.modelPairs + " pairs over " + data.timing.stages.length +
+        " stage(s), " + data.timing.totalMs + " ms on the server, " +
+        roundTrip.toFixed(0) + " ms round trip."
+      );
+    }).catch(function (error) {
+      el("response").textContent = "";
+      el("response-size").textContent = "";
+      setStatus(error.message, true);
+    }).then(function () {
+      state.busy = false;
+      if (state.pending) { state.pending = false; run(); }
+    });
+  }
+
+  function renderPresets() {
+    var host = el("presets");
+    host.textContent = "";
+    PRESET_GROUPS.forEach(function (group) {
+      var optgroup = document.createElement("optgroup");
+      optgroup.label = group.label;
+      group.names.forEach(function (name) {
+        var option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        option.selected = name === LANDING;
+        optgroup.appendChild(option);
+      });
+      host.appendChild(optgroup);
+    });
+    host.addEventListener("change", function (event) {
+      writeRequest(JSON.parse(JSON.stringify(PRESETS[event.target.value])));
+      run();
+    });
+  }
+
+  // An open tab never re-requests the page, so no caching header can tell it that
+  // the page on disk has changed. Ask, and say so when it has, rather than reloading
+  // underneath whatever is half-typed in the request box.
+  function watchForANewerPage() {
+    var booted = null;
+    function look() {
+      fetch("/api/version").then(function (response) {
+        return response.json();
+      }).then(function (version) {
+        if (booted === null) { booted = version.page; return; }
+        if (version.page !== booted) { announceStalePage(); }
+      }).catch(function () { /* the server is restarting; ask again next tick. */ });
+    }
+    look();
+    setInterval(look, 4000);
+  }
+
+  function announceStalePage() {
+    if (el("stale")) { return; }
+    var banner = document.createElement("div");
+    banner.className = "stale";
+    banner.id = "stale";
+    banner.appendChild(document.createTextNode(
+      "This page has changed on the server. What you are looking at is the old one."
+    ));
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "primary";
+    button.textContent = "Reload";
+    button.addEventListener("click", function () { location.reload(); });
+    banner.appendChild(button);
+    document.querySelector(".wrap").prepend(banner);
+  }
+
+  el("run").addEventListener("click", run);
+  el("format").addEventListener("click", function () {
+    var body = readRequest();
+    if (body) {
+      writeRequest(body);
+      setStatus("Formatted.");
+    }
+  });
+  TOGGLES.forEach(function (pair) {
+    el(pair[0]).addEventListener("click", function () { toggleField(pair[1]); });
+  });
+
+  fetch("/api/model").then(function (response) {
+    return response.json();
+  }).then(function (model) {
+    el("model-line").textContent = "Model: " + model.name + ", " + model.maxSeqLength +
+      "-token context. Reasons by leave-one-out, which reads the context you " +
+      "actually have; detail uses exact Shapley up to " +
+      model.maxExactShapleyUnits + " evidence units.";
+  }).catch(function () {
+    el("model-line").textContent = "";
+  });
+
+  renderPresets();
+  watchForANewerPage();
+  writeRequest(JSON.parse(JSON.stringify(PRESETS[LANDING])));
+  run();
+}());
+</script>
+</body>
+</html>
